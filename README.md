@@ -1,4 +1,4 @@
-# SDOH Risk Stratification (Streamlit)
+# SDOH Risk Stratification
 
 A SMART-on-FHIR–style population health demo that pulls synthetic patients from a FHIR server, computes a transparent Social Risk Score using SDOH + clinical + utilization signals, and surfaces a prioritized outreach list with factor explanations.
 
@@ -16,7 +16,7 @@ A SMART-on-FHIR–style population health demo that pulls synthetic patients fro
 - `docs/` — Project plan and backlog.
 - `tests/` — Pytest suite for scoring.
 
-## Running locally (uv, no Docker)
+## Running locally
 1. Install uv if not present: `pip install uv`.
 2. Copy env defaults (optional): `cp .env.example .env` and edit `FHIR_BASE_URL`, `PATIENT_LIMIT`, `REQUEST_TIMEOUT` as needed.
 3. Install deps: `uv sync`.
