@@ -1,0 +1,15 @@
+[project]
+name = "project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fhir-resources>=8.2.0",
+    "httpx>=0.28.1",
+    "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+    "pytest>=9.0.2",
+    "python-dateutil>=2.9.0.post0",
+    "streamlit>=1.55.0",
+]
