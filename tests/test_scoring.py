@@ -89,3 +89,28 @@ def test_scoring_high_risk_unemployed():
     assert "High recent ED utilization" not in factors
     assert "Age ≥ 65" not in factors
     assert "Unemployment/underemployment" in factors
+
+def test_ed_one_visit_is_one_point():
+    score, factors = score_patient({}, {}, recent_ed_visits=1, age=30)
+    assert score == 1
+    assert "High recent ED utilization" in factors
+
+def test_ed_four_visits_is_three_points():
+    score, _ = score_patient({}, {}, recent_ed_visits=4, age=30)
+    assert score == 3
+
+def test_age_75_is_two_points():
+    score, factors = score_patient({}, {}, recent_ed_visits=0, age=75)
+    assert score == 2
+    assert "Age ≥ 65" in factors
+
+def test_unemployment_is_two_points():
+    score, factors = score_patient({"unemployed": True}, {}, recent_ed_visits=0, age=30)
+    assert score == 2
+    assert "Unemployment/underemployment" in factors
+
+def test_score_equals_sum_of_all_factors():
+    from domain.scoring import score_patient_v2
+    sdoh = {"housing_insecure": True, "food_insecure": True, "unemployed": True}
+    score, details = score_patient_v2(sdoh, {"diabetes": True}, recent_ed_visits=3, age=77)
+    assert score == sum(d.points for d in details)
