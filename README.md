@@ -1,6 +1,4 @@
-# SDOH Risk Stratification
-
-A SMART-on-FHIR–style population health demo that pulls synthetic patients from a FHIR server, computes a transparent Social Risk Score using SDOH + clinical + utilization signals, and surfaces a prioritized outreach list with factor explanations.
+A SMART-on-FHIR–style population health demo that pulls synthetic patients from a FHIR server, computes a transparent Social Risk Score using SDOH + clinical + utilization signals, and delivers a prioritized outreach list with explanations.
 
 ## What the app does
 - **Connects to FHIR**: Reads `Patient`, `Observation` (SDOH/PRAPARE-like), `Condition`, and `Encounter` resources from a public HAPI FHIR endpoint (configurable).
