@@ -1,7 +1,20 @@
 from __future__ import annotations
-
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+@dataclass(frozen=True)
+class FactorDetail:
+    name: str
+    points: int
+    severity: str
+    explanation: str
+
+    @property
+    def as_label(self) -> str:
+        return self.name
+
+
+MAX_RAW_SCORE: int = 19  # sum of all max per-factor points
 
 def score_patient(
     sdoh_flags: Dict[str, bool],
@@ -22,7 +35,7 @@ def score_patient(
         score += 2
         factors.append("Transportation barrier")
     if sdoh_flags.get("unemployed"):
-        score += 1
+        score += 2
         factors.append("Unemployment/underemployment")
 
     if condition_flags.get("diabetes"):
@@ -31,11 +44,10 @@ def score_patient(
     if condition_flags.get("hypertension"):
         score += 2
         factors.append("Hypertension")
-
+    
     if recent_ed_visits >= 2:
-        score += 2
-        factors.append("High recent ED utilization")
-
+            score += 2
+            factors.append("High recent ED utilization")
     if age is not None and age >= 65:
         score += 1
         factors.append("Age ≥ 65")
