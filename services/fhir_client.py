@@ -18,17 +18,13 @@ import datetime
 import httpx
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from config import get_settings
-from dataclasses import dataclass  
 
 
 log = logging.getLogger(__name__)
-
-# Meta tag used to filter our project's resources on shared FHIR servers
-TAG_SYSTEM = "https://sdoh-demo"
-TAG_CODE = "sdoh-project"
 
 
 class FHIRError(Exception):
@@ -41,13 +37,6 @@ class FHIRNotFoundError(FHIRError):
 
 class FHIRServerError(FHIRError):
     """Raised on HTTP 5xx."""
-
-@dataclass
-class WriteBackResult:
-    success: bool
-    resource_type: str
-    resource_id: Optional[str] = None
-    error_message: Optional[str] = None
 
 def _next_url(bundle: Dict[str, Any]) -> Optional[str]:
     for link in bundle.get("link") or []:
@@ -194,7 +183,8 @@ class FHIRClient:
     def _tag_param(self) -> Dict[str, str]:
         """Return tag filter param if enabled."""
         if self.use_tag_filter:
-            return {"_tag": f"{TAG_SYSTEM}|{TAG_CODE}"}
+            s = get_settings()
+            return {"_tag": f"{s.system_tag}|{s.code_tag}"}
         return {}
 
     def search_patients(self, count: int = 20) -> List[Dict[str, Any]]:
@@ -245,9 +235,10 @@ class FHIRClient:
         answer_code = pos_ans if positive_risk else neg_ans
         
         # Build FHIR R4 Observation payload
+        s = get_settings()
         payload = {
             "resourceType": "Observation",
-            "meta": {"tag": [{"system": TAG_SYSTEM, "code": TAG_CODE}]},
+            "meta": {"tag": [{"system": s.system_tag, "code": s.code_tag}]},
             "status": "final",
             "category": [{
                 "coding": [{"system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "social-history", "display": "Social History"}]
@@ -271,32 +262,37 @@ class FHIRClient:
             
         return resp.json()
 
-  #Implement optional documentation feature to write back CarePlan or ServiceRequest resources to the FHIR server
+    # Implement optional documentation feature to write back CarePlan or ServiceRequest resources to the FHIR server
 
-    def write_care_plan(self, patient_id: str, tier: str, score: int, factors: list) -> "WriteBackResult":
+    def write_care_plan(self, patient_id: str, tier: str, score: int, factors: list) -> Dict[str, Any]:
         """POST a CarePlan resource for a patient to the FHIR server."""
-        import datetime
         explanations = [f.name for f in factors] if factors else []
+        s = get_settings()
         resource = {
             "resourceType": "CarePlan",
-            "meta": {"tag": [{"system": TAG_SYSTEM, "code": TAG_CODE}]},
+            "meta": {"tag": [{"system": s.system_tag, "code": s.code_tag}]},
             "status": "active",
             "intent": "plan",
             "title": f"SDOH Risk Management Plan — {tier} ({score}/20)",
             "subject": {"reference": f"Patient/{patient_id}"},
             "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "identifier": [{"system": "https://sdoh-demo/careplan-ids", "value": f"sdoh-cp-{patient_id}"}],
+            "identifier": [{"system": f"{s.org_identifier_system}/careplan-ids", "value": f"sdoh-cp-{patient_id}"}],
             "note": [{"text": "; ".join(explanations) if explanations else "No risk factors recorded."}],
             "activity": self._build_activities(explanations),
         }
-        return self._post_resource(resource)
+        resp = self._client.post("/CarePlan", json=resource)
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise FHIRError(f"Failed to publish CarePlan: {exc.response.text}") from exc
+        return resp.json()
 
-    def write_service_request(self, patient_id: str, tier: str, score: int, reason: str = "Social Work Referral") -> "WriteBackResult":
+    def write_service_request(self, patient_id: str, tier: str, score: int, reason: str = "Social Work Referral") -> Dict[str, Any]:
         """POST a ServiceRequest referral resource for a patient."""
-        import datetime
+        s = get_settings()
         resource = {
             "resourceType": "ServiceRequest",
-            "meta": {"tag": [{"system": TAG_SYSTEM, "code": TAG_CODE}]},
+            "meta": {"tag": [{"system": s.system_tag, "code": s.code_tag}]},
             "status": "active",
             "intent": "order",
             "priority": "urgent" if tier == "HIGH" else "routine",
@@ -306,22 +302,15 @@ class FHIRClient:
             },
             "subject": {"reference": f"Patient/{patient_id}"},
             "authoredOn": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "identifier": [{"system": "https://sdoh-demo/sr-ids", "value": f"sdoh-sr-{patient_id}"}],
+            "identifier": [{"system": f"{s.org_identifier_system}/sr-ids", "value": f"sdoh-sr-{patient_id}"}],
             "note": [{"text": f"SDOH score: {score}/20 ({tier}). Reason: {reason}"}],
         }
-        return self._post_resource(resource)
-
-    def _post_resource(self, resource: Dict[str, Any]) -> "WriteBackResult":
-        resource_type = resource["resourceType"]
+        resp = self._client.post("/ServiceRequest", json=resource)
         try:
-            resp = self._client.post(f"/{resource_type}", json=resource)
-            if resp.status_code in (200, 201):
-                return WriteBackResult(success=True, resource_type=resource_type, resource_id=resp.json().get("id", "unknown"))
-            return WriteBackResult(success=False, resource_type=resource_type, error_message=f"Server returned {resp.status_code}: {resp.text[:200]}")
-        except httpx.TimeoutException:
-            return WriteBackResult(success=False, resource_type=resource_type, error_message=f"Request timed out after {self.timeout}s")
-        except httpx.RequestError as exc:
-            return WriteBackResult(success=False, resource_type=resource_type, error_message=f"Network error: {exc}")
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise FHIRError(f"Failed to publish ServiceRequest: {exc.response.text}") from exc
+        return resp.json()
 
     @staticmethod
     def _build_activities(explanations: list) -> list:

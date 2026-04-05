@@ -6,6 +6,7 @@ import pandas as pd
 from config import get_settings
 from services.patient_repository import load_patient_frame
 from services.fhir_client import get_client
+from domain.scoring import score_to_tier
 
 settings = get_settings()
 
@@ -60,7 +61,7 @@ with st.sidebar:
     f_htn = st.checkbox("Hypertension")
 
     st.subheader("Risk Tier")
-    tier = st.radio("Show", ["All", "High (≥ 8)", "Medium (4–7)", "Low (0–3)"], label_visibility="collapsed")
+    tier = st.radio("Show", ["All", "High (≥ 12)", "Medium (7–11)", "Low (0–6)"], label_visibility="collapsed")
 
 # ---- Apply filters ----
 
@@ -71,9 +72,9 @@ if f_transport: filtered = filtered[filtered["transport_barrier"]]
 if f_unemployed:filtered = filtered[filtered["unemployed"]]
 if f_diabetes:  filtered = filtered[filtered["diabetes"]]
 if f_htn:       filtered = filtered[filtered["hypertension"]]
-if "High" in tier:   filtered = filtered[filtered["score"] >= 8]
-elif "Medium" in tier: filtered = filtered[(filtered["score"] >= 4) & (filtered["score"] <= 7)]
-elif "Low" in tier:  filtered = filtered[filtered["score"] <= 3]
+if "High" in tier:   filtered = filtered[filtered["score"] >= 12]
+elif "Medium" in tier: filtered = filtered[(filtered["score"] >= 7) & (filtered["score"] <= 11)]
+elif "Low" in tier:  filtered = filtered[filtered["score"] <= 6]
 
 # ---- Metrics row ----
 
@@ -95,9 +96,7 @@ st.bar_chart(chart, x="Score", y="Count", height=200)
 # ---- Patient table ----
 
 def _tier(s):
-    if s >= 8: return "HIGH"
-    if s >= 4: return "MEDIUM"
-    return "LOW"
+    return score_to_tier(s).value
 
 st.subheader(f"Prioritized Patients ({len(filtered)} of {len(df)})")
 
@@ -115,7 +114,7 @@ st.subheader("Patient Details")
 
 for _, row in filtered.iterrows():
     score = row["score"]
-    tier_txt = "HIGH" if score >= 8 else "MEDIUM" if score >= 4 else "LOW"
+    tier_txt = score_to_tier(score).value
 
     with st.expander(f"{row['name']}  —  Score {score}/20  {tier_txt}"):
         # Factor breakdown
@@ -163,49 +162,49 @@ for _, row in filtered.iterrows():
             st.write(f"ED visits (6 mo): {int(row['recent_ed_visits'])}")
             st.write(f"Encounters (6 mo): {int(row['recent_encounters'])}")
             st.write(f"Total encounters: {int(row['total_encounters'])}")
-         #optional careplan / servicerequest write-back to fhir server
+        # optional careplan / servicerequest write-back to fhir server
         if tier_txt == "HIGH":
             st.divider()
             st.markdown("**Documentation Write-Back** *(optional — writes to FHIR server)*")
  
-            #gaurd against non-live modes because synthea/demo patient id's don't exist on hapi server
+            # guard against non-live modes because synthea/demo patient id's don't exist on hapi server
             if data_source != "Live FHIR Server (HAPI)":
                 st.warning("Write-back is only available when using Live FHIR Server (HAPI). Switch data sources in the sidebar.")
             else:
                 col_a, col_b = st.columns(2)
  
                 with col_a:
-                    if st.button("Create CarePlan", key=f"cp_{row.name}"):
+                    if st.button("Create CarePlan", key=f"cp_{row['id']}"):
                         with st.spinner("Writing CarePlan..."):
-                            result = get_client().write_care_plan(
-                                patient_id=str(row['id']),
-                                tier=tier_txt,
-                                score=score,
-                                factors=row.get("details", []),
-                            )
-                        if result.success:
-                            st.success(f"CarePlan created — ID: {result.resource_id}")
-                        else:
-                            st.error(f"Failed: {result.error_message}")
+                            try:
+                                result = get_client().write_care_plan(
+                                    patient_id=str(row['id']),
+                                    tier=tier_txt,
+                                    score=score,
+                                    factors=row.get("details", []),
+                                )
+                                st.success(f"CarePlan created — ID: {result.get('id', 'unknown')}")
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
  
                 with col_b:
                     reason = st.selectbox(
                         "Referral type",
                         ["Social Work Referral", "Housing Services", "Food Assistance", "Transportation"],
-                        key=f"sr_reason_{row.name}",
+                        key=f"sr_reason_{row['id']}",
                     )
-                    if st.button("Create ServiceRequest", key=f"sr_{row.name}"):
+                    if st.button("Create ServiceRequest", key=f"sr_{row['id']}"):
                         with st.spinner("Writing ServiceRequest..."):
-                            result = get_client().write_service_request(
-                                patient_id=str(row['id']),  
-                                tier=tier_txt,
-                                score=score,
-                                reason=reason,
-                            )
-                        if result.success:
-                            st.success(f"ServiceRequest created — ID: {result.resource_id}")
-                        else:
-                            st.error(f"Failed: {result.error_message}")
+                            try:
+                                result = get_client().write_service_request(
+                                    patient_id=str(row['id']),  
+                                    tier=tier_txt,
+                                    score=score,
+                                    reason=reason,
+                                )
+                                st.success(f"ServiceRequest created — ID: {result.get('id', 'unknown')}")
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
  
 
 # ---- Footer ----
