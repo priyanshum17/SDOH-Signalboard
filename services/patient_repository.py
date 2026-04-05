@@ -1,81 +1,223 @@
+"""Assembles a patient‑level DataFrame by pulling FHIR resources and scoring.
+
+Supports two modes:
+  1. **Demo mode** (``USE_DEMO_DATA=true``, default) — reads pre-generated FHIR
+     bundles from ``demo_data/fhir_bundles/`` for instant, offline operation.
+  2. **Live mode** (``USE_DEMO_DATA=false``) — queries a real FHIR server
+     (e.g. HAPI FHIR) via the FHIR client.
+"""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+import json
+import logging
+import os
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
+from pydantic import ValidationError as PydanticValidationError
+
+# fhir.resources — Pydantic-based FHIR R4 models for validation
+from fhir.resources.patient import Patient as FHIRPatient
+from fhir.resources.observation import Observation as FHIRObservation
 
 from config import get_settings
 from domain import scoring
 from services.fhir_client import get_client
 
-# LOINC / code lists for SDOH signals (simplified placeholders)
-HOUSING_CODES = {"71802-3", "LA30185-5", "88030-8"}
-FOOD_CODES = {"88122-7", "88124-3"}
-TRANSPORT_CODES = {"93025-5", "71802-3"}
-EMPLOYMENT_CODES = {"67875-5"}
-
-CHRONIC_DIABETES_CODES = {"44054006", "73211009"}
-CHRONIC_HTN_CODES = {"38341003"}
+log = logging.getLogger(__name__)
 
 
-def _flag_from_observations(observations: List[Dict]) -> Dict[str, bool]:
+def _validate_patient(raw: Dict[str, Any]) -> bool:
+    """Validate a raw Patient dict against the FHIR R4 Patient schema."""
+    try:
+        FHIRPatient.model_validate(raw)
+        return True
+    except PydanticValidationError as exc:
+        log.debug("Patient validation failed for %s: %s", raw.get("id"), exc)
+        return False
+
+
+def _validate_observation(raw: Dict[str, Any]) -> bool:
+    """Validate a raw Observation dict against the FHIR R4 Observation schema."""
+    try:
+        FHIRObservation.model_validate(raw)
+        return True
+    except PydanticValidationError as exc:
+        log.debug("Observation validation failed for %s: %s", raw.get("id"), exc)
+        return False
+
+# ---------------------------------------------------------------------------
+# Authoritative LOINC / SNOMED code sets (aligned with PRAPARE)
+# ---------------------------------------------------------------------------
+
+# SDOH observation LOINC codes → which flag they set
+SDOH_CODE_MAP: Dict[str, str] = {
+    "71802-3":  "housing",      # Housing status
+    "88122-7":  "food",         # Food insecurity screening
+    "93030-5":  "transport",    # Transportation barrier
+    "67875-5":  "employment",   # Employment status
+    "93038-8":  "stress",       # Stress level
+}
+
+# Answer codes that indicate a *positive* risk
+HOUSING_RISK_ANSWERS  = {"LA30186-3", "LA30187-1"}  # unstable / worried
+FOOD_RISK_ANSWERS     = {"LA33-6"}                   # "Yes"
+TRANSPORT_RISK_ANSWERS = {"LA33-6"}                  # "Yes"
+EMPLOYMENT_RISK_ANSWERS = {"LA17958-2", "LA18005-1"} # unemployed / seeking
+STRESS_RISK_ANSWERS    = {"LA13914-9", "LA13902-4"}  # quite a bit / very much
+
+# Chronic condition SNOMED codes
+DIABETES_CODES  = {"44054006", "73211009"}
+HTN_CODES       = {"38341003"}
+
+# ---------------------------------------------------------------------------
+# SDOH flag extraction
+# ---------------------------------------------------------------------------
+
+
+def _flag_from_observations(observations: List[Dict[str, Any]]) -> Dict[str, bool]:
+    """Parse FHIR Observation resources for SDOH risk flags."""
     flags = {
-        "housing_insecure": False,
-        "food_insecure": False,
+        "housing_insecure":  False,
+        "food_insecure":     False,
         "transport_barrier": False,
-        "unemployed": False,
+        "unemployed":        False,
+        "high_stress":       False,
     }
     for obs in observations:
-        codes = set()
-        code = obs.get("code", {})
-        for cc in code.get("coding", []) or []:
+        # Get the LOINC code for this observation
+        obs_codes: set[str] = set()
+        for cc in (obs.get("code", {}).get("coding") or []):
             if cc.get("code"):
-                codes.add(cc["code"])
-        if codes & HOUSING_CODES:
-            flags["housing_insecure"] = True
-        if codes & FOOD_CODES:
-            flags["food_insecure"] = True
-        if codes & TRANSPORT_CODES:
-            flags["transport_barrier"] = True
-        if codes & EMPLOYMENT_CODES:
-            flags["unemployed"] = True
+                obs_codes.add(cc["code"])
+
+        # Get the answer code(s)
+        answer_codes: set[str] = set()
+        value_cc = obs.get("valueCodeableConcept", {})
+        for cc in (value_cc.get("coding") or []):
+            if cc.get("code"):
+                answer_codes.add(cc["code"])
+
+        # Match question code → check answer
+        for obs_code in obs_codes:
+            domain = SDOH_CODE_MAP.get(obs_code)
+            if domain == "housing" and answer_codes & HOUSING_RISK_ANSWERS:
+                flags["housing_insecure"] = True
+            elif domain == "food" and answer_codes & FOOD_RISK_ANSWERS:
+                flags["food_insecure"] = True
+            elif domain == "transport" and answer_codes & TRANSPORT_RISK_ANSWERS:
+                flags["transport_barrier"] = True
+            elif domain == "employment" and answer_codes & EMPLOYMENT_RISK_ANSWERS:
+                flags["unemployed"] = True
+            elif domain == "stress" and answer_codes & STRESS_RISK_ANSWERS:
+                flags["high_stress"] = True
+
     return flags
 
 
-def _condition_flags(conditions: List[Dict]) -> Dict[str, bool]:
+def _condition_flags(conditions: List[Dict[str, Any]]) -> Dict[str, bool]:
     flags = {"diabetes": False, "hypertension": False}
     for cond in conditions:
-        code = cond.get("code", {})
-        codings = code.get("coding", []) or []
-        for cc in codings:
+        for cc in (cond.get("code", {}).get("coding") or []):
             code_val = cc.get("code")
-            if code_val in CHRONIC_DIABETES_CODES:
+            if code_val in DIABETES_CODES:
                 flags["diabetes"] = True
-            if code_val in CHRONIC_HTN_CODES:
+            if code_val in HTN_CODES:
                 flags["hypertension"] = True
     return flags
 
 
-def _encounter_counts(encounters: List[Dict]) -> Tuple[int, int]:
-    now = datetime.utcnow()
+def _encounter_counts(encounters: List[Dict[str, Any]]) -> Tuple[int, int, int]:
+    """Returns (total_encounters, recent_encounters_6mo, recent_ed_visits_6mo)."""
+    now = datetime.now(timezone.utc)
     six_months_ago = now - timedelta(days=180)
     recent = 0
+    recent_ed = 0
     total = len(encounters)
+
     for enc in encounters:
         period = enc.get("period") or {}
         start = period.get("start")
         if start:
             try:
-                start_dt = datetime.fromisoformat(start.rstrip("Z"))
+                start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
                 if start_dt >= six_months_ago:
                     recent += 1
-            except ValueError:
+                    # Check if this is an ED encounter
+                    enc_class = (enc.get("class") or {}).get("code", "").upper()
+                    if enc_class in ("EMER", "EMERGENCY"):
+                        recent_ed += 1
+                    else:
+                        # Check type for ED
+                        for t in (enc.get("type") or []):
+                            for coding in (t.get("coding") or []):
+                                if coding.get("code") == "50849002":
+                                    recent_ed += 1
+                                    break
+            except (ValueError, TypeError):
                 continue
-    return total, recent
+    return total, recent, recent_ed
 
 
-def load_patient_frame() -> pd.DataFrame:
+# ---------------------------------------------------------------------------
+# Demo mode: load from local fixture files
+# ---------------------------------------------------------------------------
+
+def _load_demo_patients(bundle_dir: Path) -> pd.DataFrame:
+    """Read bundles from a specific directory and assemble a DataFrame."""
+    settings = get_settings()
+
+    if not bundle_dir.exists():
+        log.warning("Demo data directory not found: %s", bundle_dir)
+        return pd.DataFrame()
+
+    rows = []
+    files = sorted(bundle_dir.glob("patient_*.json"))
+    for fpath in files[: settings.patient_limit]:
+        with open(fpath, "r") as f:
+            bundle = json.load(f)
+
+        # Separate resources by type
+        patient_res = None
+        observations: List[Dict] = []
+        conditions: List[Dict] = []
+        encounters: List[Dict] = []
+
+        for entry in bundle.get("entry", []):
+            res = entry.get("resource", {})
+            rt = res.get("resourceType")
+            if rt == "Patient":
+                patient_res = res
+            elif rt == "Observation":
+                observations.append(res)
+            elif rt == "Condition":
+                conditions.append(res)
+            elif rt == "Encounter":
+                encounters.append(res)
+
+        if patient_res is None:
+            continue
+
+        row = _build_patient_row(patient_res, observations, conditions, encounters)
+        if row:
+            rows.append(row)
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df.sort_values(by="score", ascending=False, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Live mode: pull from FHIR server
+# ---------------------------------------------------------------------------
+
+def _load_live_patients() -> pd.DataFrame:
+    """Query a real FHIR server and assemble the DataFrame."""
     settings = get_settings()
     client = get_client()
     patients = client.search_patients(settings.patient_limit)
@@ -85,51 +227,114 @@ def load_patient_frame() -> pd.DataFrame:
         pid = pat.get("id")
         if not pid:
             continue
-        observations = client.fetch_observations(pid)
-        conditions = client.fetch_conditions(pid)
-        encounters = client.fetch_encounters(pid)
+        try:
+            observations = client.fetch_sdoh_observations(pid)
+            conditions = client.fetch_conditions(pid)
+            encounters = client.fetch_encounters(pid)
+        except Exception as exc:
+            log.warning("Error fetching data for patient %s: %s", pid, exc)
+            continue
 
-        sdoh_flags = _flag_from_observations(observations)
-        cond_flags = _condition_flags(conditions)
-        total_enc, recent_enc = _encounter_counts(encounters)
-
-        age = None
-        birth_date = pat.get("birthDate")
-        if birth_date:
-            try:
-                bdt = datetime.fromisoformat(birth_date)
-                age = (datetime.utcnow().date() - bdt.date()).days // 365
-            except ValueError:
-                age = None
-
-        score, factors = scoring.score_patient(
-            sdoh_flags=sdoh_flags,
-            condition_flags=cond_flags,
-            recent_ed_visits=recent_enc,
-            age=age,
-        )
-
-        rows.append(
-            {
-                "id": pid,
-                "name": _patient_name(pat),
-                "age": age,
-                "recent_encounters": recent_enc,
-                "total_encounters": total_enc,
-                **sdoh_flags,
-                **cond_flags,
-                "score": score,
-                "factors": factors,
-            }
-        )
+        row = _build_patient_row(pat, observations, conditions, encounters)
+        if row:
+            rows.append(row)
 
     df = pd.DataFrame(rows)
     if not df.empty:
         df.sort_values(by="score", ascending=False, inplace=True)
+        df.reset_index(drop=True, inplace=True)
     return df
 
 
-def _patient_name(pat: Dict) -> str:
+# ---------------------------------------------------------------------------
+# Shared row builder
+# ---------------------------------------------------------------------------
+
+def _build_patient_row(
+    patient: Dict[str, Any],
+    observations: List[Dict[str, Any]],
+    conditions: List[Dict[str, Any]],
+    encounters: List[Dict[str, Any]],
+) -> Dict[str, Any] | None:
+    pid = patient.get("id")
+    if not pid:
+        return None
+
+    # Validate Patient resource against FHIR R4 schema (fhir.resources)
+    if not _validate_patient(patient):
+        log.warning("Skipping invalid Patient resource: %s", pid)
+        return None
+
+    sdoh_flags = _flag_from_observations(observations)
+    cond_flags = _condition_flags(conditions)
+    total_enc, recent_enc, recent_ed = _encounter_counts(encounters)
+
+    age: int | None = None
+    age_str, gender = "(unknown)", "(unknown)"
+    birth_date = patient.get("birthDate")
+    if birth_date:
+        try:
+            bdt = datetime.strptime(birth_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - bdt).days // 365
+            age_str = str(age)
+        except ValueError:
+            pass
+
+    score, details = scoring.score_patient_v2(
+        sdoh_flags=sdoh_flags, 
+        condition_flags=cond_flags, 
+        recent_ed_visits=recent_ed, 
+        age=age
+    )
+
+    gender = patient.get("gender", "(unknown)")
+
+    city = ""
+    state = ""
+    if patient.get("address"):
+        addr = patient["address"][0]
+        city = addr.get("city", "")
+        state = addr.get("state", "")
+
+    return {
+        "id": pid,
+        "name": _patient_name(patient),
+        "age": age_str,
+        "gender": gender,
+        "city": city,
+        "state": state,
+        "recent_encounters": recent_enc,
+        "recent_ed_visits": recent_ed,
+        "total_encounters": total_enc,
+        **sdoh_flags,
+        **cond_flags,
+        "score": score,
+        "details": details,
+        "factors": [d.name for d in details],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def load_patient_frame(source_mode: str = "Live FHIR Server (HAPI)") -> pd.DataFrame:
+    """Load patient cohort from demo data or live FHIR server."""
+    settings = get_settings()
+    
+    if source_mode == "Local Generation (Synthea)":
+        log.info("Loading Synthea bundles from local disk")
+        return _load_demo_patients(Path("demo_data/fhir_bundles"))
+    elif source_mode == "Legacy Demo Data (Backup)":
+        log.info("Loading Legacy demo bundles from local disk")
+        return _load_demo_patients(Path("demo_data/fhir_bundles_backup"))
+    else:
+        # Default to Live FHIR Server
+        log.info("Loading patients from FHIR server: %s", settings.fhir_base_url)
+        return _load_live_patients()
+
+
+def _patient_name(pat: Dict[str, Any]) -> str:
     names = pat.get("name") or []
     if not names:
         return "(unknown)"

@@ -8,3 +8,23 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Env files
+.env
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+synthea/synthea-with-dependencies.jar

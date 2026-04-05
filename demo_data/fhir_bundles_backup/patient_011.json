@@ -1,0 +1,598 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2",
+        "meta": {
+          "profile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:oid:2.16.840.1.113883.4.3.25",
+            "value": "1D319E70"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "family": "Campbell",
+            "given": [
+              "Michael"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1976-03-14",
+        "address": [
+          {
+            "use": "home",
+            "city": "Seattle",
+            "state": "CO",
+            "country": "US"
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "555-985-7570",
+            "use": "home"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:7495d538-45f5-4971-b371-199da807b141",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "7495d538-45f5-4971-b371-199da807b141",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "social-history",
+                "display": "Social History"
+              },
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey",
+                "display": "Survey"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/SDOH-category",
+                "code": "sdoh",
+                "display": "SDOH"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "71802-3",
+              "display": "Housing status"
+            }
+          ],
+          "text": "Housing status"
+        },
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "effectiveDateTime": "2026-03-07T19:47:22Z",
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "LA30187-1",
+              "display": "I am worried about losing my housing"
+            }
+          ],
+          "text": "I am worried about losing my housing"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/7495d538-45f5-4971-b371-199da807b141"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:f0a6909d-a634-4e6a-868e-d3098d8e64e7",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "f0a6909d-a634-4e6a-868e-d3098d8e64e7",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "social-history",
+                "display": "Social History"
+              },
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey",
+                "display": "Survey"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/SDOH-category",
+                "code": "sdoh",
+                "display": "SDOH"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "88122-7",
+              "display": "Within the past 12 months you worried food would run out"
+            }
+          ],
+          "text": "Within the past 12 months you worried food would run out"
+        },
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "effectiveDateTime": "2026-03-07T19:47:22Z",
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "LA32-8",
+              "display": "No"
+            }
+          ],
+          "text": "No"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/f0a6909d-a634-4e6a-868e-d3098d8e64e7"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:23546052-c8b7-4dbe-a725-dda3c03e40c6",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "23546052-c8b7-4dbe-a725-dda3c03e40c6",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "social-history",
+                "display": "Social History"
+              },
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey",
+                "display": "Survey"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/SDOH-category",
+                "code": "sdoh",
+                "display": "SDOH"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "93030-5",
+              "display": "Has lack of transportation kept you from medical appointments"
+            }
+          ],
+          "text": "Has lack of transportation kept you from medical appointments"
+        },
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "effectiveDateTime": "2026-03-07T19:47:22Z",
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "LA33-6",
+              "display": "Yes"
+            }
+          ],
+          "text": "Yes"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/23546052-c8b7-4dbe-a725-dda3c03e40c6"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:beef6fa8-d485-4f0e-b9c0-5a94874d4c50",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "beef6fa8-d485-4f0e-b9c0-5a94874d4c50",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "social-history",
+                "display": "Social History"
+              },
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey",
+                "display": "Survey"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/SDOH-category",
+                "code": "sdoh",
+                "display": "SDOH"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "67875-5",
+              "display": "Employment status"
+            }
+          ],
+          "text": "Employment status"
+        },
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "effectiveDateTime": "2026-03-07T19:47:22Z",
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "LA17957-4",
+              "display": "Part-time work"
+            }
+          ],
+          "text": "Part-time work"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/beef6fa8-d485-4f0e-b9c0-5a94874d4c50"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ab28b502-5d48-4d2a-8d80-98617e54bd16",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "ab28b502-5d48-4d2a-8d80-98617e54bd16",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "social-history",
+                "display": "Social History"
+              },
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey",
+                "display": "Survey"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/SDOH-category",
+                "code": "sdoh",
+                "display": "SDOH"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "93038-8",
+              "display": "Stress level"
+            }
+          ],
+          "text": "Stress level"
+        },
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "effectiveDateTime": "2026-03-07T19:47:22Z",
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "LA13909-9",
+              "display": "Somewhat"
+            }
+          ],
+          "text": "Somewhat"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/ab28b502-5d48-4d2a-8d80-98617e54bd16"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ec976986-f04a-465a-99e6-8a9795327555",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "ec976986-f04a-465a-99e6-8a9795327555",
+        "meta": {
+          "profile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition"
+          ]
+        },
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "encounter-diagnosis",
+                "display": "Encounter Diagnosis"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "38341003",
+              "display": "Hypertension"
+            }
+          ],
+          "text": "Hypertension"
+        },
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "onsetDateTime": "2016-12-02T19:47:22Z"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Condition/ec976986-f04a-465a-99e6-8a9795327555"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:510bc251-bd22-42e6-8c66-efd03f935647",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "510bc251-bd22-42e6-8c66-efd03f935647",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "308335008",
+                "display": "Patient encounter procedure"
+              }
+            ],
+            "text": "ambulatory"
+          }
+        ],
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "period": {
+          "start": "2025-04-05T19:47:22Z",
+          "end": "2025-04-05T20:47:22Z"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/510bc251-bd22-42e6-8c66-efd03f935647"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:2e8c5079-6c6e-4666-ac6e-2e2628e58859",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "2e8c5079-6c6e-4666-ac6e-2e2628e58859",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "308335008",
+                "display": "Patient encounter procedure"
+              }
+            ],
+            "text": "ambulatory"
+          }
+        ],
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "period": {
+          "start": "2025-10-20T19:47:22Z",
+          "end": "2025-10-20T20:47:22Z"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/2e8c5079-6c6e-4666-ac6e-2e2628e58859"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:3f6fa628-bf77-41e3-ba9b-788a20b622ef",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "3f6fa628-bf77-41e3-ba9b-788a20b622ef",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "308335008",
+                "display": "Patient encounter procedure"
+              }
+            ],
+            "text": "ambulatory"
+          }
+        ],
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "period": {
+          "start": "2025-08-17T19:47:22Z",
+          "end": "2025-08-17T20:47:22Z"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/3f6fa628-bf77-41e3-ba9b-788a20b622ef"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:3c314550-b995-4d0f-889a-be419775cc67",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "3c314550-b995-4d0f-889a-be419775cc67",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "308335008",
+                "display": "Patient encounter procedure"
+              }
+            ],
+            "text": "ambulatory"
+          }
+        ],
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "period": {
+          "start": "2025-11-22T19:47:22Z",
+          "end": "2025-11-22T20:47:22Z"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/3c314550-b995-4d0f-889a-be419775cc67"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:89b23dda-72b8-430c-b6ea-b3770f2cecc9",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "89b23dda-72b8-430c-b6ea-b3770f2cecc9",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "308335008",
+                "display": "Patient encounter procedure"
+              }
+            ],
+            "text": "ambulatory"
+          }
+        ],
+        "subject": {
+          "reference": "Patient/8ce776c0-dca6-474d-b76e-9ff1f1ffeaa2"
+        },
+        "period": {
+          "start": "2025-08-28T19:47:22Z",
+          "end": "2025-08-28T20:47:22Z"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/89b23dda-72b8-430c-b6ea-b3770f2cecc9"
+      }
+    }
+  ]
+}
