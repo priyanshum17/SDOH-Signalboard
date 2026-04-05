@@ -167,40 +167,45 @@ for _, row in filtered.iterrows():
         if tier_txt == "HIGH":
             st.divider()
             st.markdown("**Documentation Write-Back** *(optional — writes to FHIR server)*")
-            col_a, col_b = st.columns(2)
  
-            with col_a:
-                if st.button("Create CarePlan", key=f"cp_{row.name}"):
-                    with st.spinner("Writing CarePlan..."):
-                        result = get_client().write_care_plan(
-                            patient_id=str(row.name),
-                            tier=tier_txt,
-                            score=score,
-                            factors=row.get("details", []),
-                        )
-                    if result.success:
-                        st.success(f"CarePlan created — ID: {result.resource_id}")
-                    else:
-                        st.error(f"Failed: {result.error_message}")
+            #gaurd against non-live modes because synthea/demo patient id's don't exist on hapi server
+            if data_source != "Live FHIR Server (HAPI)":
+                st.warning("Write-back is only available when using Live FHIR Server (HAPI). Switch data sources in the sidebar.")
+            else:
+                col_a, col_b = st.columns(2)
  
-            with col_b:
-                reason = st.selectbox(
-                    "Referral type",
-                    ["Social Work Referral", "Housing Services", "Food Assistance", "Transportation"],
-                    key=f"sr_reason_{row.name}",
-                )
-                if st.button("Create ServiceRequest", key=f"sr_{row.name}"):
-                    with st.spinner("Writing ServiceRequest..."):
-                        result = get_client().write_service_request(
-                            patient_id=str(row.name),
-                            tier=tier_txt,
-                            score=score,
-                            reason=reason,
-                        )
-                    if result.success:
-                        st.success(f"ServiceRequest created — ID: {result.resource_id}")
-                    else:
-                        st.error(f"Failed: {result.error_message}")
+                with col_a:
+                    if st.button("Create CarePlan", key=f"cp_{row.name}"):
+                        with st.spinner("Writing CarePlan..."):
+                            result = get_client().write_care_plan(
+                                patient_id=str(row['id']),
+                                tier=tier_txt,
+                                score=score,
+                                factors=row.get("details", []),
+                            )
+                        if result.success:
+                            st.success(f"CarePlan created — ID: {result.resource_id}")
+                        else:
+                            st.error(f"Failed: {result.error_message}")
+ 
+                with col_b:
+                    reason = st.selectbox(
+                        "Referral type",
+                        ["Social Work Referral", "Housing Services", "Food Assistance", "Transportation"],
+                        key=f"sr_reason_{row.name}",
+                    )
+                    if st.button("Create ServiceRequest", key=f"sr_{row.name}"):
+                        with st.spinner("Writing ServiceRequest..."):
+                            result = get_client().write_service_request(
+                                patient_id=str(row['id']),  
+                                tier=tier_txt,
+                                score=score,
+                                reason=reason,
+                            )
+                        if result.success:
+                            st.success(f"ServiceRequest created — ID: {result.resource_id}")
+                        else:
+                            st.error(f"Failed: {result.error_message}")
  
 
 # ---- Footer ----
