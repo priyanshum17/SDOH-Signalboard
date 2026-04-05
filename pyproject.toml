@@ -1,7 +1,7 @@
 [project]
 name = "project"
 version = "0.1.0"
-description = "A SMART-on-FHIR Streamlit dashboard that pulls synthetic patients, fuses SDOH screens with conditions and utilization into a transparent Social Risk Score, and ranks who needs outreach first with clear factor explanations and filters for care teams."
+description = "A Streamlit dashboard that pulls synthetic patients, fuses SDOH screens with conditions and utilization into a transparent Social Risk Score, and ranks who needs outreach first with clear factor explanations and filters for care teams."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
