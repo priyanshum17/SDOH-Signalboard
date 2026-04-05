@@ -1,3 +1,27 @@
 [theme]
+
+# Base theme
 base = "dark"
+
+# Primary accent color
 primaryColor = "#38bdf8"
+
+# Background color for the main content area
+backgroundColor = "#0e1117"
+
+# Background color for sidebar and most interactive widgets
+secondaryBackgroundColor = "#262730"
+
+# Color used for almost all text
+textColor = "#fafafa"
+
+# Font family for all text
+font = "monospace"
+
+[theme.sidebar]
+backgroundColor = "#1a1c23"
+textColor = "#ffffff"
+
+[theme.button]
+backgroundColor = "#38bdf8"
+textColor = "#000000"
