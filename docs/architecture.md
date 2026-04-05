@@ -6,44 +6,6 @@ This document outlines the system architecture, data flow, and underlying mechan
 
 The system operates across three primary stages: **Simulated Data Generation**, **FHIR REST Integration**, and **Risk Orchestration & Visualization**.
 
-```mermaid
-flowchart TD
-    %% Synthea Subsystem
-    subgraph Data Generation Pipeline
-        A[Synthea Engine] --> |Generates Base Clinical Data| B[Raw FHIR Bundles]
-        B --> C[enrich_synthea.py]
-        C --> |Injects PRAPARE SDOH Observations| D[Enriched Local Bundles]
-        D --> E[upload_data.py]
-    end
-
-    %% External Infrastructure
-    subgraph External Infrastructure
-        E --> |FHIR REST POST| F[(HAPI FHIR Public Server)]
-        F --> |Hosts Data| F
-    end
-
-    %% Application Layer
-    subgraph Application Backend \nservices/
-        F <-- |HTTP GET / Search Queries| G[fhir_client.py]
-        G --> |Raw FHIR JSON| H[patient_repository.py]
-        H -.-> |Validates Schema| I[fhir.resources Pydantic layer]
-        H --> |Parses Context| J[domain/scoring.py Mathematical Engine]
-        J --> |Applies Matrix Logic| H
-        H --> |Structured Pandas DataFrame| K[Data Presentation Layer]
-    end
-
-    %% User Interface
-    subgraph Streamlit Interface \napp.py
-        K --> L[Dashboard UI]
-        L --> M{Views}
-        M --> N(Top-Level Aggregates / KPIs)
-        M --> O(Patient Data Table)
-        M --> P(Expanded Deep-Dive Profiles)
-    end
-```
-
----
-
 ## Component Breakdown
 
 ### 1. Data Generation Pipeline (Synthea + Python)

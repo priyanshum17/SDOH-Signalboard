@@ -31,9 +31,8 @@ The frontend is built using **Streamlit**, functioning as an enterprise-grade cl
 ## Quick Start
 
 ```bash
-pip install uv          # if not installed
-uv sync                 # install dependencies
-uv run streamlit run app.py   # launch application
+uv sync             
+uv run streamlit run app.py
 ```
 
 To run exclusively with offline demo data instead of a live network fetch:
@@ -72,9 +71,3 @@ If you want to generate your own data and push to the live server:
 ```bash
 uv run pytest -v
 ```
-
-## Deploying to Streamlit Cloud
-
-1. Push this repository to GitHub.
-2. Go to [share.streamlit.io](https://share.streamlit.io).
-3. Set the main file to `app.py` and deploy. Ensure you set your target `FHIR_BASE_URL` in the Streamlit Cloud environment secrets if using a non-default server.
