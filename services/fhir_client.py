@@ -21,6 +21,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 from config import get_settings
+from dataclasses import dataclass  
+
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +42,12 @@ class FHIRNotFoundError(FHIRError):
 class FHIRServerError(FHIRError):
     """Raised on HTTP 5xx."""
 
+@dataclass
+class WriteBackResult:
+    success: bool
+    resource_type: str
+    resource_id: Optional[str] = None
+    error_message: Optional[str] = None
 
 def _next_url(bundle: Dict[str, Any]) -> Optional[str]:
     for link in bundle.get("link") or []:
@@ -262,6 +270,80 @@ class FHIRClient:
             raise FHIRError(f"Failed to publish observation: {exc.response.text}") from exc
             
         return resp.json()
+
+  #Implement optional documentation feature to write back CarePlan or ServiceRequest resources to the FHIR server
+
+    def write_care_plan(self, patient_id: str, tier: str, score: int, factors: list) -> "WriteBackResult":
+        """POST a CarePlan resource for a patient to the FHIR server."""
+        import datetime
+        explanations = [f.name for f in factors] if factors else []
+        resource = {
+            "resourceType": "CarePlan",
+            "meta": {"tag": [{"system": TAG_SYSTEM, "code": TAG_CODE}]},
+            "status": "active",
+            "intent": "plan",
+            "title": f"SDOH Risk Management Plan — {tier} ({score}/20)",
+            "subject": {"reference": f"Patient/{patient_id}"},
+            "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "identifier": [{"system": "https://sdoh-demo/careplan-ids", "value": f"sdoh-cp-{patient_id}"}],
+            "note": [{"text": "; ".join(explanations) if explanations else "No risk factors recorded."}],
+            "activity": self._build_activities(explanations),
+        }
+        return self._post_resource(resource)
+
+    def write_service_request(self, patient_id: str, tier: str, score: int, reason: str = "Social Work Referral") -> "WriteBackResult":
+        """POST a ServiceRequest referral resource for a patient."""
+        import datetime
+        resource = {
+            "resourceType": "ServiceRequest",
+            "meta": {"tag": [{"system": TAG_SYSTEM, "code": TAG_CODE}]},
+            "status": "active",
+            "intent": "order",
+            "priority": "urgent" if tier == "HIGH" else "routine",
+            "code": {
+                "coding": [{"system": "http://snomed.info/sct", "code": "306206005", "display": "Referral to social work"}],
+                "text": reason,
+            },
+            "subject": {"reference": f"Patient/{patient_id}"},
+            "authoredOn": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "identifier": [{"system": "https://sdoh-demo/sr-ids", "value": f"sdoh-sr-{patient_id}"}],
+            "note": [{"text": f"SDOH score: {score}/20 ({tier}). Reason: {reason}"}],
+        }
+        return self._post_resource(resource)
+
+    def _post_resource(self, resource: Dict[str, Any]) -> "WriteBackResult":
+        resource_type = resource["resourceType"]
+        try:
+            resp = self._client.post(f"/{resource_type}", json=resource)
+            if resp.status_code in (200, 201):
+                return WriteBackResult(success=True, resource_type=resource_type, resource_id=resp.json().get("id", "unknown"))
+            return WriteBackResult(success=False, resource_type=resource_type, error_message=f"Server returned {resp.status_code}: {resp.text[:200]}")
+        except httpx.TimeoutException:
+            return WriteBackResult(success=False, resource_type=resource_type, error_message=f"Request timed out after {self.timeout}s")
+        except httpx.RequestError as exc:
+            return WriteBackResult(success=False, resource_type=resource_type, error_message=f"Network error: {exc}")
+
+    @staticmethod
+    def _build_activities(explanations: list) -> list:
+        _MAP = {
+            "housing":       ("Housing assistance referral",       "Connect patient with local housing authority."),
+            "food":          ("Food security referral",            "Refer to food bank or SNAP enrollment."),
+            "transport":     ("Transportation assistance",         "Arrange non-emergency medical transport."),
+            "unemploy":      ("Employment services referral",      "Refer to workforce development center."),
+            "stress":        ("Behavioral health referral",        "Connect with counseling or stress management."),
+            "diabetes":      ("Diabetes self-management education","Enroll in DSMES program."),
+            "hypertension":  ("Blood pressure monitoring",        "Schedule 30-day BP follow-up."),
+            "ed utilization":("Care transitions follow-up",       "Schedule post-ED follow-up within 7 days."),
+        }
+        activities, seen = [], set()
+        for exp in explanations:
+            for keyword, (title, detail) in _MAP.items():
+                if keyword in exp.lower() and title not in seen:
+                    seen.add(title)
+                    activities.append({"detail": {"status": "not-started", "code": {"text": title}, "description": detail}})
+        if not activities:
+            activities.append({"detail": {"status": "not-started", "code": {"text": "General social needs assessment"}, "description": "Care manager review required."}})
+        return activities
 
     def close(self) -> None:
         self._client.close()
