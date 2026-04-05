@@ -26,6 +26,7 @@ The frontend is built using **Streamlit**, functioning as an enterprise-grade cl
 *   **High-Level Analytics**: The top of the dashboard provides population-level metrics (e.g., Total Patients vs. Percentage in the "High Risk" tier).
 *   **Deep Dive Capabilities**: Care managers can sort their highest-risk patients, open expander views, and review the explicit breakdown of why a patient scored highly.
 
+
 ---
 
 ## Quick Start
@@ -71,3 +72,26 @@ If you want to generate your own data and push to the live server:
 ```bash
 uv run pytest -v
 ```
+## Viewing Written FHIR Resources (CarePlan and ServiceRequest)
+
+After using the **Write-Back** feature on a HIGH-risk patient, you can verify the resources were successfully created on the HAPI FHIR server. The easiest way to view them is in HAPI's built-in HTML viewer:
+
+
+**All CarePlans created by this project:**
+https://hapi.fhir.org/baseR4/CarePlan?_tag=https://sdoh-demo|sdoh-project&_format=html
+
+**All ServiceRequests created by this project:**
+https://hapi.fhir.org/baseR4/ServiceRequest?_tag=https://sdoh-demo|sdoh-project&_format=html
+
+
+Replace `PATIENT_ID` with the ID shown in the green success message after clicking **Create CarePlan** in the dashboard.
+
+All resources written by this app are tagged with `https://sdoh-demo|sdoh-project`, isolating them from other resources on the shared public server. Each CarePlan includes a patient reference, risk score, auto-generated activities mapped from the patient's SDOH risk factors, and a note summarizing all contributing factors.
+
+> **Note:** Write-back is only available when using **Live FHIR Server (HAPI)** as the data source. The HAPI public server does not enforce identifier uniqueness, so clicking the button multiple times will create duplicate resources — expected behavior on a shared test server.
+
+
+
+If you want to clean up duplicates or test resources you've already written, you can delete them by ID:
+DELETE https://hapi.fhir.org/baseR4/CarePlan/131683938
+DELETE https://hapi.fhir.org/baseR4/CarePlan/131683939
