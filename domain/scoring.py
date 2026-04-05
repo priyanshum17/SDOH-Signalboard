@@ -120,3 +120,23 @@ def score_patient(
     """Legacy wrapper — returns ``(total_score, [factor_name, ...])``."""
     total, details = score_patient_v2(sdoh_flags, condition_flags, recent_ed_visits, age)
     return total, [d.name for d in details]
+
+
+#  tier helpers 
+
+from enum import Enum
+
+
+class RiskTier(str, Enum):
+    LOW    = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH   = "HIGH"
+
+
+def score_to_tier(score: int) -> RiskTier:
+    """Maps a raw score (0–20) to a priority tier."""
+    if score >= 12:
+        return RiskTier.HIGH
+    if score >= 7:
+        return RiskTier.MEDIUM
+    return RiskTier.LOW
