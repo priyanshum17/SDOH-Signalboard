@@ -27,4 +27,3 @@ Thumbs.db
 
 # Pytest
 .pytest_cache/
-synthea/synthea-with-dependencies.jar
