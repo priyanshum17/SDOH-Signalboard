@@ -73,6 +73,9 @@ If you want to generate your own data and push to the live server:
 uv run pytest -v
 ```
 ## Viewing Written FHIR Resources (CarePlan and ServiceRequest)
+To use the **Write-Back** feature on a HIGH-risk patient, you must be in Live FHIR Server (HAPI) mode, open a HIGH-risk patient's expander, then navigate to **Patient Details**. Scroll to the bottom for the specified patient and you will see **Documentation Write-Back (optional — writes to FHIR server)**. This presents two options, ***Create CarePlan*** and ***Create ServiceRequest***. 
+
+
 
 After using the **Write-Back** feature on a HIGH-risk patient, you can verify the resources were successfully created on the HAPI FHIR server. The easiest way to view them is in HAPI's built-in HTML viewer:
 
