@@ -12,6 +12,7 @@ Two public entry points:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 
@@ -123,9 +124,6 @@ def score_patient(
 
 
 #  tier helpers 
-
-from enum import Enum
-
 
 class RiskTier(str, Enum):
     LOW    = "LOW"
