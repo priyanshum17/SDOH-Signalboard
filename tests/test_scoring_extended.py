@@ -1,124 +1,162 @@
 import pytest
-from domain.scoring import compute_risk_score, RiskTier
-
-def _patient(
-    conditions=None,
-    sdoh_flags=None,
-    ed_visits_last_year=0,
-    age=45,
-):
-    """Minimal patient dict matching the shape scoring.py expects."""
-    return {
-        "age": age,
-        "conditions": conditions or [],
-        "sdoh_flags": sdoh_flags or {},
-        "ed_visits_last_year": ed_visits_last_year,
-    }
+from domain.scoring import (
+    score_patient_v2,
+    score_patient,
+    score_to_tier,
+    RiskTier,
+    MAX_RAW_SCORE,
+    FactorDetail,
+)
 
 
-def test_zero_risk_empty_patient():
-    result = compute_risk_score(_patient())
-    assert result.score == 0
-    assert result.tier == RiskTier.LOW
+def _no_flags():
+    return {"housing_insecure": False, "food_insecure": False,
+            "transport_barrier": False, "unemployed": False, "high_stress": False}
+
+def _no_conditions():
+    return {"diabetes": False, "hypertension": False}
 
 
-@pytest.mark.parametrize("condition,expected_min_score", [
-    ("diabetes", 10),
-    ("hypertension", 10),
-    ("ckd", 10),
-    ("copd", 10),
+
+def test_zero_risk_all_negative():
+    score, details = score_patient_v2(_no_flags(), _no_conditions(), 0, 40)
+    assert score == 0
+    assert details == []
+
+
+
+@pytest.mark.parametrize("flag,expected_pts", [
+    ("housing_insecure",  3),
+    ("food_insecure",     3),
+    ("transport_barrier", 2),
+    ("unemployed",        2),
+    ("high_stress",       1),
 ])
-def test_single_chronic_condition_raises_score(condition, expected_min_score):
-    result = compute_risk_score(_patient(conditions=[condition]))
-    assert result.score >= expected_min_score
+def test_each_sdoh_flag_adds_correct_points(flag, expected_pts):
+    flags = _no_flags()
+    flags[flag] = True
+    score, details = score_patient_v2(flags, _no_conditions(), 0, 40)
+    assert score == expected_pts
+    assert len(details) == 1
+    assert details[0].points == expected_pts
 
 
-def test_multiple_conditions_additive():
-    single = compute_risk_score(_patient(conditions=["diabetes"]))
-    multi = compute_risk_score(_patient(conditions=["diabetes", "hypertension"]))
-    assert multi.score > single.score
+def test_all_sdoh_flags_additive():
+    all_flags = {k: True for k in _no_flags()}
+    score, _ = score_patient_v2(all_flags, _no_conditions(), 0, 40)
+    assert score == 3 + 3 + 2 + 2 + 1  # = 11
 
 
-def test_ed_visits_raise_score():
-    no_ed = compute_risk_score(_patient())
-    with_ed = compute_risk_score(_patient(ed_visits_last_year=3))
-    assert with_ed.score > no_ed.score
 
-
-@pytest.mark.parametrize("flag", [
-    "housing_insecurity",
-    "food_insecurity",
-    "transportation_barrier",
-    "unemployment",
-    "social_isolation",
+@pytest.mark.parametrize("condition,expected_pts", [
+    ("diabetes",     2),
+    ("hypertension", 2),
 ])
-def test_each_sdoh_flag_raises_score(flag):
-    result = compute_risk_score(_patient(sdoh_flags={flag: True}))
-    assert result.score > 0
+def test_each_condition_adds_correct_points(condition, expected_pts):
+    conditions = _no_conditions()
+    conditions[condition] = True
+    score, details = score_patient_v2(_no_flags(), conditions, 0, 40)
+    assert score == expected_pts
 
 
-def test_multiple_sdoh_flags_additive():
-    one = compute_risk_score(_patient(sdoh_flags={"housing_insecurity": True}))
-    two = compute_risk_score(_patient(sdoh_flags={
-        "housing_insecurity": True,
-        "food_insecurity": True,
-    }))
-    assert two.score > one.score
+def test_both_conditions_additive():
+    score, _ = score_patient_v2(_no_flags(), {"diabetes": True, "hypertension": True}, 0, 40)
+    assert score == 4
 
 
-def test_interaction_multiplier_applied_when_clinical_plus_housing():
-    """Homeless + diabetes should score higher than sum of parts."""
-    clinical_only = compute_risk_score(_patient(conditions=["diabetes"]))
-    sdoh_only = compute_risk_score(_patient(sdoh_flags={"housing_insecurity": True}))
-    combined = compute_risk_score(_patient(
-        conditions=["diabetes"],
-        sdoh_flags={"housing_insecurity": True},
-    ))
-    assert combined.score > clinical_only.score + sdoh_only.score
+
+@pytest.mark.parametrize("visits,expected_pts", [
+    (0, 0),
+    (1, 1),
+    (2, 2),
+    (3, 3),
+    (5, 3),   
+])
+def test_ed_visit_tiers(visits, expected_pts):
+    score, _ = score_patient_v2(_no_flags(), _no_conditions(), visits, 40)
+    assert score == expected_pts
 
 
-def test_age_65_plus_raises_score():
-    young = compute_risk_score(_patient(age=40))
-    senior = compute_risk_score(_patient(age=70))
-    assert senior.score > young.score
+def test_ed_uses_only_one_tier():
+    """Only the highest matching tier should fire, not multiple."""
+    _, details = score_patient_v2(_no_flags(), _no_conditions(), 3, 40)
+    ed_details = [d for d in details if "ED" in d.name or "utilization" in d.name.lower()]
+    assert len(ed_details) == 1
+
+
+
+@pytest.mark.parametrize("age,expected_pts", [
+    (40,  0),
+    (64,  0),
+    (65,  1),
+    (74,  1),
+    (75,  2),
+    (90,  2),
+])
+def test_age_tiers(age, expected_pts):
+    score, _ = score_patient_v2(_no_flags(), _no_conditions(), 0, age)
+    assert score == expected_pts
+
+
+def test_age_none_does_not_crash():
+    score, _ = score_patient_v2(_no_flags(), _no_conditions(), 0, None)
+    assert score == 0
+
+
+
+def test_factor_detail_has_required_fields():
+    flags = _no_flags()
+    flags["housing_insecure"] = True
+    _, details = score_patient_v2(flags, _no_conditions(), 0, 40)
+    d = details[0]
+    assert isinstance(d, FactorDetail)
+    assert d.name
+    assert d.points > 0
+    assert d.severity in ("high", "medium", "low")
+    assert d.explanation
+
+
+def test_factor_detail_as_label():
+    flags = _no_flags()
+    flags["housing_insecure"] = True
+    _, details = score_patient_v2(flags, _no_conditions(), 0, 40)
+    assert details[0].as_label == details[0].name
+
+
+
+def test_score_patient_returns_strings_not_objects():
+    flags = _no_flags()
+    flags["housing_insecure"] = True
+    score, names = score_patient(flags, _no_conditions(), 0, 40)
+    assert isinstance(score, int)
+    assert all(isinstance(n, str) for n in names)
+
+
+def test_score_patient_matches_v2_score():
+    flags = {k: True for k in _no_flags()}
+    conditions = {"diabetes": True, "hypertension": False}
+    s1, _ = score_patient_v2(flags, conditions, 2, 68)
+    s2, _ = score_patient(flags, conditions, 2, 68)
+    assert s1 == s2
+
+
+
+def test_max_raw_score_value():
+    """Verify the declared constant matches actual max achievable score."""
+    all_flags = {k: True for k in _no_flags()}
+    all_conditions = {k: True for k in _no_conditions()}
+    score, _ = score_patient_v2(all_flags, all_conditions, 5, 80)
+    assert score == MAX_RAW_SCORE
+
+
 
 @pytest.mark.parametrize("score,expected_tier", [
     (0,   RiskTier.LOW),
-    (30,  RiskTier.LOW),
-    (50,  RiskTier.MEDIUM),
-    (75,  RiskTier.HIGH),
-    (100, RiskTier.HIGH),
+    (6,   RiskTier.LOW),
+    (7,   RiskTier.MEDIUM),
+    (11,  RiskTier.MEDIUM),
+    (12,  RiskTier.HIGH),
+    (20,  RiskTier.HIGH),
 ])
-def test_tier_from_score(score, expected_tier):
-    """Tier classification is deterministic given a known score."""
-    from domain.scoring import score_to_tier
+def test_score_to_tier(score, expected_tier):
     assert score_to_tier(score) == expected_tier
-
-
-def test_score_never_exceeds_100():
-    worst_case = _patient(
-        conditions=["diabetes", "hypertension", "ckd", "copd"],
-        sdoh_flags={
-            "housing_insecurity": True,
-            "food_insecurity": True,
-            "transportation_barrier": True,
-            "unemployment": True,
-            "social_isolation": True,
-        },
-        ed_visits_last_year=10,
-        age=85,
-    )
-    result = compute_risk_score(worst_case)
-    assert result.score <= 100
-
-def test_explanations_non_empty_for_high_risk():
-    result = compute_risk_score(_patient(
-        conditions=["diabetes"],
-        sdoh_flags={"housing_insecurity": True},
-    ))
-    assert len(result.explanations) > 0
-
-
-def test_explanations_empty_for_zero_risk():
-    result = compute_risk_score(_patient())
-    assert result.explanations == []
