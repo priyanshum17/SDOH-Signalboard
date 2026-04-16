@@ -216,7 +216,20 @@ class FHIRClient:
         return self._get_all_entries(
             "/Encounter", {"patient": patient_id, "_count": 100}, "Encounter"
         )
-        
+      
+    def fetch_care_plans(self, patient_id: str) -> List[Dict[str, Any]]:
+        """Return CarePlan resources for a patient, tag-filtered if enabled.
+ 
+        Ordered by last-updated descending if the server supports _sort.
+        """
+        params: Dict[str, Any] = {
+            "patient": patient_id,
+            "_count": 50,
+            "_sort": "-_lastUpdated",
+            **self._tag_param(),
+        }
+        return self._get_all_entries("/CarePlan", params, "CarePlan")
+ 
     def publish_sdoh_observation(self, patient_id: str, feature_key: str, positive_risk: bool) -> Dict[str, Any]:
         """Creates a brand new FHIR Observation detailing an SDOH risk status."""
         
@@ -264,22 +277,57 @@ class FHIRClient:
 
     # Implement optional documentation feature to write back CarePlan or ServiceRequest resources to the FHIR server
 
-    def write_care_plan(self, patient_id: str, tier: str, score: int, factors: list) -> Dict[str, Any]:
-        """POST a CarePlan resource for a patient to the FHIR server."""
-        explanations = [f.name for f in factors] if factors else []
-        s = get_settings()
-        resource = {
-            "resourceType": "CarePlan",
-            "meta": {"tag": [{"system": s.system_tag, "code": s.code_tag}]},
-            "status": "active",
-            "intent": "plan",
-            "title": f"SDOH Risk Management Plan — {tier} ({score}/20)",
-            "subject": {"reference": f"Patient/{patient_id}"},
-            "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "identifier": [{"system": f"{s.org_identifier_system}/careplan-ids", "value": f"sdoh-cp-{patient_id}"}],
-            "note": [{"text": "; ".join(explanations) if explanations else "No risk factors recorded."}],
-            "activity": self._build_activities(explanations),
-        }
+    def write_care_plan(
+        self,
+        patient_id: str,
+        tier: Optional[str] = None,
+        score: Optional[int] = None,
+        factors: Optional[list] = None,
+        *,
+        resource: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """POST a CarePlan resource for a patient to the FHIR server.
+ 
+        Two calling conventions:
+          1. New:    write_care_plan(patient_id, resource=<dict>)
+                     -- caller has already built the full FHIR CarePlan dict
+                     (used by pages/3_care_plan.py).
+          2. Legacy: write_care_plan(patient_id, tier, score, factors)
+                     -- builds a minimal CarePlan from scoring factors
+                     (used by the dashboard's HIGH-tier quick-action button).
+        """
+        if resource is None:
+            # Legacy path — preserves original dashboard behavior.
+            if tier is None or score is None:
+                raise ValueError(
+                    "write_care_plan requires either `resource=<dict>` or "
+                    "(tier, score, factors)."
+                )
+            explanations = [f.name for f in (factors or [])]
+            s = get_settings()
+            resource = {
+                "resourceType": "CarePlan",
+                "meta": {"tag": [{"system": s.system_tag, "code": s.code_tag}]},
+                "status": "active",
+                "intent": "plan",
+                "title": f"SDOH Risk Management Plan — {tier} ({score}/20)",
+                "subject": {"reference": f"Patient/{patient_id}"},
+                "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "identifier": [{
+                    "system": f"{s.org_identifier_system}/careplan-ids",
+                    "value": f"sdoh-cp-{patient_id}",
+                }],
+                "note": [{"text": "; ".join(explanations) if explanations else "No risk factors recorded."}],
+                "activity": self._build_activities(explanations),
+            }
+        else:
+            # New path — trust the caller's resource, but assert subject matches.
+            subj = (resource.get("subject") or {}).get("reference", "")
+            if subj and not subj.endswith(f"/{patient_id}"):
+                raise ValueError(
+                    f"CarePlan subject {subj!r} does not match patient_id {patient_id!r}"
+                )
+ 
         resp = self._client.post("/CarePlan", json=resource)
         try:
             resp.raise_for_status()
