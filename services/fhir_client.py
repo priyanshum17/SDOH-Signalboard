@@ -45,6 +45,44 @@ def _next_url(bundle: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+class AzureOAuth(httpx.Auth):
+    """Dynamic OAuth2 token fetching using Client Credentials."""
+    def __init__(self, tenant_id: str, client_id: str, client_secret: str, resource_url: str):
+        self.tenant_id = tenant_id
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.resource_url = resource_url
+        self._token: Optional[str] = None
+        self._expires_at: float = 0
+
+    def get_token(self) -> str:
+        if self._token and time.time() < self._expires_at:
+            return self._token
+
+        token_url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "grant_type": "client_credentials",
+            "scope": f"{self.resource_url}/.default"
+        }
+        resp = httpx.post(token_url, data=data, timeout=10.0)
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            log.error("Failed to fetch Azure OAuth token: %s", exc.response.text)
+            raise FHIRError("Azure Authentication failed") from exc
+
+        token_data = resp.json()
+        self._token = token_data["access_token"]
+        self._expires_at = time.time() + token_data.get("expires_in", 3599) - 60
+        return self._token
+
+    def auth_flow(self, request):
+        request.headers["Authorization"] = f"Bearer {self.get_token()}"
+        yield request
+
+
 class FHIRClient:
     """FHIR R4 client with SMART on FHIR awareness.
 
@@ -71,10 +109,11 @@ class FHIRClient:
         self,
         base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_retries: int = 2,
+        max_retries: int = 5,
         retry_backoff: float = 0.5,
         max_pages: int = 10,
         use_tag_filter: bool = True,
+        use_azure_auth: bool = False,
     ):
         settings = get_settings()
         self.base_url = (base_url or settings.fhir_base_url).rstrip("/")
@@ -83,10 +122,23 @@ class FHIRClient:
         self.retry_backoff = retry_backoff
         self.max_pages = max_pages
         self.use_tag_filter = use_tag_filter
+        self.use_azure_auth = use_azure_auth
+
+        headers = {"Accept": "application/fhir+json"}
+        auth = None
+        if self.use_azure_auth and settings.azure_tenant_id and settings.azure_client_id:
+            auth = AzureOAuth(
+                tenant_id=settings.azure_tenant_id,
+                client_id=settings.azure_client_id,
+                client_secret=settings.azure_client_secret,
+                resource_url=self.base_url
+            )
+
         self._client = httpx.Client(
             base_url=self.base_url,
             timeout=self.timeout,
-            headers={"Accept": "application/fhir+json"},
+            headers=headers,
+            auth=auth,
         )
 
     def __enter__(self) -> "FHIRClient":
@@ -143,6 +195,17 @@ class FHIRClient:
                 if attempt < self.max_retries:
                     time.sleep(self.retry_backoff * (2**attempt))
             except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429:
+                    last_exc = exc
+                    if attempt < self.max_retries:
+                        retry_after = exc.response.headers.get("Retry-After")
+                        try:
+                            sleep_time = float(retry_after) if retry_after else (self.retry_backoff * (2**attempt))
+                        except ValueError:
+                            sleep_time = self.retry_backoff * (2**attempt)
+                        log.warning(f"Rate limited (429). Retrying after {sleep_time} seconds...")
+                        time.sleep(sleep_time)
+                        continue
                 raise FHIRError(str(exc)) from exc
         raise FHIRError("Max retries exceeded") from last_exc
 
@@ -386,11 +449,20 @@ class FHIRClient:
         self._client.close()
 
 
-_default_client: Optional[FHIRClient] = None
+_clients: Dict[str, FHIRClient] = {}
 
-
-def get_client() -> FHIRClient:
-    global _default_client
-    if _default_client is None:
-        _default_client = FHIRClient()
-    return _default_client
+def get_client(source_mode: str = "Live FHIR Server (HAPI)") -> FHIRClient:
+    global _clients
+    if source_mode not in _clients:
+        settings = get_settings()
+        if source_mode == "Private Azure FHIR Server":
+            _clients[source_mode] = FHIRClient(
+                base_url=settings.fhir_base_url,
+                use_azure_auth=True
+            )
+        else:
+            _clients[source_mode] = FHIRClient(
+                base_url="https://hapi.fhir.org/baseR4",
+                use_azure_auth=False
+            )
+    return _clients[source_mode]
