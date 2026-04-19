@@ -44,6 +44,9 @@ class Settings:
     system_tag: str
     code_tag: str
     org_identifier_system: str
+    azure_tenant_id: str
+    azure_client_id: str
+    azure_client_secret: str
 
 
 _settings = Settings(
@@ -55,6 +58,9 @@ _settings = Settings(
     system_tag=_get_env("SYSTEM_TAG", "https://sdoh-demo"),
     code_tag=_get_env("CODE_TAG", "sdoh-project"),
     org_identifier_system=_get_env("ORG_IDENTIFIER_SYSTEM", "https://sdoh-demo"),
+    azure_tenant_id=_get_env("AZURE_TENANT_ID", ""),
+    azure_client_id=_get_env("AZURE_CLIENT_ID", ""),
+    azure_client_secret=_get_env("AZURE_CLIENT_SECRET", ""),
 )
 
 
