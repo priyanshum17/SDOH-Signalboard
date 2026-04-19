@@ -458,7 +458,8 @@ def get_client(source_mode: str = "Live FHIR Server (HAPI)") -> FHIRClient:
         if source_mode == "Private Azure FHIR Server":
             _clients[source_mode] = FHIRClient(
                 base_url=settings.fhir_base_url,
-                use_azure_auth=True
+                use_azure_auth=True,
+                use_tag_filter=False
             )
         else:
             _clients[source_mode] = FHIRClient(

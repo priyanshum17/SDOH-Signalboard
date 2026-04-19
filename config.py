@@ -3,12 +3,24 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+import streamlit as st
+
+def _get_raw(name: str) -> Optional[str]:
+    try:
+        if name in st.secrets:
+            val = st.secrets[name]
+            return str(val) if val is not None else None
+    except Exception:
+        pass
+    return os.getenv(name)
+
 def _get_env(name: str, default: Optional[str] = None) -> str:
-    return os.getenv(name, default) if os.getenv(name) not in (None, "") else (default or "")  # type: ignore
+    raw = _get_raw(name)
+    return raw if raw not in (None, "") else (default or "")  # type: ignore
 
 
 def _get_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
+    raw = _get_raw(name)
     if raw is None or raw.strip() == "":
         return default
     try:
@@ -18,7 +30,7 @@ def _get_float(name: str, default: float) -> float:
 
 
 def _get_int(name: str, default: int) -> int:
-    raw = os.getenv(name)
+    raw = _get_raw(name)
     if raw is None or raw.strip() == "":
         return default
     try:
@@ -28,7 +40,7 @@ def _get_int(name: str, default: int) -> int:
 
 
 def _get_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
+    raw = _get_raw(name)
     if raw is None or raw.strip() == "":
         return default
     return raw.strip().lower() in ("1", "true", "yes")
