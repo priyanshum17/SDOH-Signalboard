@@ -216,26 +216,56 @@ def _load_demo_patients(bundle_dir: Path) -> pd.DataFrame:
 # Live mode: pull from FHIR server
 # ---------------------------------------------------------------------------
 
-def _load_live_patients() -> pd.DataFrame:
-    """Query a real FHIR server and assemble the DataFrame."""
+def _group_by_patient(resources: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Helper to group a flat list of FHIR resources by their subject.reference Patient ID."""
+    grouped = {}
+    for res in resources:
+        ref = (res.get("subject") or {}).get("reference", "")
+        if ref.startswith("Patient/"):
+            pid = ref.split("/", 1)[1]
+            grouped.setdefault(pid, []).append(res)
+    return grouped
+
+def _load_live_patients(source_mode: str) -> pd.DataFrame:
+    """Query a real FHIR server and assemble the DataFrame using Batch Fetching."""
     settings = get_settings()
-    client = get_client()
+    client = get_client(source_mode)
+    
+    # 1. Fetch patients
     patients = client.search_patients(settings.patient_limit)
 
+    pids = [p.get("id") for p in patients if p.get("id")]
+    if not pids:
+        return pd.DataFrame()
+
+    # Create a comma-separated list of IDs for batch querying (e.g. "1,2,3")
+    patient_id_csv = ",".join(pids)
+
+    # 2. Batch fetch ALL related data for ALL patients in just 3 sequential requests
+    try:
+        all_obs = client.fetch_sdoh_observations(patient_id_csv)
+        all_conds = client.fetch_conditions(patient_id_csv)
+        all_encs = client.fetch_encounters(patient_id_csv)
+    except Exception as exc:
+        log.error("Failed to batch fetch data: %s", exc)
+        all_obs, all_conds, all_encs = [], [], []
+
+    # 3. Group the flat responses back into dictionaries keyed by Patient ID
+    obs_by_pid = _group_by_patient(all_obs)
+    conds_by_pid = _group_by_patient(all_conds)
+    encs_by_pid = _group_by_patient(all_encs)
+
+    # 4. Assemble the final rows
     rows = []
     for pat in patients:
         pid = pat.get("id")
-        if not pid:
-            continue
-        try:
-            observations = client.fetch_sdoh_observations(pid)
-            conditions = client.fetch_conditions(pid)
-            encounters = client.fetch_encounters(pid)
-        except Exception as exc:
-            log.warning("Error fetching data for patient %s: %s", pid, exc)
-            continue
-
-        row = _build_patient_row(pat, observations, conditions, encounters)
+        if not pid: continue
+        row = _build_patient_row(
+            pat, 
+            obs_by_pid.get(pid, []), 
+            conds_by_pid.get(pid, []), 
+            encs_by_pid.get(pid, [])
+        )
         if row:
             rows.append(row)
 
@@ -329,9 +359,9 @@ def load_patient_frame(source_mode: str = "Live FHIR Server (HAPI)") -> pd.DataF
         log.info("Loading Legacy demo bundles from local disk")
         return _load_demo_patients(Path("demo_data/fhir_bundles_backup"))
     else:
-        # Default to Live FHIR Server
-        log.info("Loading patients from FHIR server: %s", settings.fhir_base_url)
-        return _load_live_patients()
+        # Default to Live FHIR Server or Private Azure FHIR Server
+        log.info("Loading patients from live server for mode: %s", source_mode)
+        return _load_live_patients(source_mode)
 
 
 def _patient_name(pat: Dict[str, Any]) -> str:
