@@ -8,13 +8,19 @@ st.caption("Bidirectional update matrix. Changes made here are securely sent to 
 
 st.warning("You are modifying live FHIR data. Audit logs are permanently appended.")
 
+data_source = st.sidebar.radio(
+    "Data Source Integration",
+    ["Legacy Demo Data (Local)", "Live FHIR Server (HAPI)", "Private Azure FHIR Server"],
+    index=2
+)
+
 # 1. Load the original reference dataframe
 @st.cache_data(show_spinner="Loading patient registry...")
-def load_live_data():
-    return load_patient_frame(source_mode="Live FHIR Server (HAPI)")
+def load_live_data(src: str):
+    return load_patient_frame(source_mode=src)
 
 try:
-    df = load_live_data()
+    df = load_live_data(data_source)
 except Exception as exc:
     st.error(f"Failed to connect to FHIR Server: {exc}")
     st.stop()
@@ -52,7 +58,7 @@ with st.form("clinical_editor_form"):
     commit_pressed = st.form_submit_button("Commit Changes to FHIR Database", type="primary")
 
 if commit_pressed:
-    client = get_client()
+    client = get_client(data_source)
     changes_made = 0
     
     with st.status("Syncing with FHIR Server...", expanded=True) as status:
