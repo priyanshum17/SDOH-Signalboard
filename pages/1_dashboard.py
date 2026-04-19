@@ -18,6 +18,7 @@ with st.sidebar:
         "Data Source Integration",
         options=[
             "Live FHIR Server (HAPI)",
+            "Private Azure FHIR Server",
             "Local Generation (Synthea)",
             "Legacy Demo Data (Backup)",
         ],
@@ -167,9 +168,9 @@ for _, row in filtered.iterrows():
             st.divider()
             st.markdown("**Documentation Write-Back** *(optional — writes to FHIR server)*")
  
-            # guard against non-live modes because synthea/demo patient id's don't exist on hapi server
-            if data_source != "Live FHIR Server (HAPI)":
-                st.warning("Write-back is only available when using Live FHIR Server (HAPI). Switch data sources in the sidebar.")
+            # guard against non-live modes because synthea/demo patient id's don't exist on server
+            if data_source not in ("Live FHIR Server (HAPI)", "Private Azure FHIR Server"):
+                st.warning("Write-back is only available when using Live servers. Switch data sources in the sidebar.")
             else:
                 col_a, col_b = st.columns(2)
  
@@ -177,7 +178,7 @@ for _, row in filtered.iterrows():
                     if st.button("Create CarePlan", key=f"cp_{row['id']}"):
                         with st.spinner("Writing CarePlan..."):
                             try:
-                                result = get_client().write_care_plan(
+                                result = get_client(data_source).write_care_plan(
                                     patient_id=str(row['id']),
                                     tier=tier_txt,
                                     score=score,
@@ -196,7 +197,7 @@ for _, row in filtered.iterrows():
                     if st.button("Create ServiceRequest", key=f"sr_{row['id']}"):
                         with st.spinner("Writing ServiceRequest..."):
                             try:
-                                result = get_client().write_service_request(
+                                result = get_client(data_source).write_service_request(
                                     patient_id=str(row['id']),  
                                     tier=tier_txt,
                                     score=score,

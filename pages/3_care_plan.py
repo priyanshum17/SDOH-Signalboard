@@ -51,6 +51,7 @@ with st.sidebar:
         "Data Source",
         options=[
             "Live FHIR Server (HAPI)",
+            "Private Azure FHIR Server",
             "Local Generation (Synthea)",
             "Legacy Demo Data (Backup)",
         ],
@@ -61,8 +62,8 @@ with st.sidebar:
     st.header("Write-Back Mode")
     dry_run = st.toggle(
         "Dry-run (preview JSON only, do not POST)",
-        value=(data_source != "Live FHIR Server (HAPI)"),
-        disabled=(data_source != "Live FHIR Server (HAPI)"),
+        value=(data_source not in ("Live FHIR Server (HAPI)", "Private Azure FHIR Server")),
+        disabled=(data_source not in ("Live FHIR Server (HAPI)", "Private Azure FHIR Server")),
         help="Forced ON for non-live data sources because local patient IDs don't exist on the server.",
     )
 
@@ -311,7 +312,7 @@ if st.button(submit_label, type=submit_type, width="stretch"):
     else:
         with st.spinner("Posting CarePlan to FHIR server..."):
             try:
-                result = get_client().write_care_plan(
+                result = get_client(data_source).write_care_plan(
                     patient_id=str(patient_id),
                     resource=resource,
                 )
@@ -328,15 +329,15 @@ if st.button(submit_label, type=submit_type, width="stretch"):
 
 st.subheader("6. Existing CarePlans")
 
-if data_source != "Live FHIR Server (HAPI)":
-    st.info("Existing CarePlans are only queryable against the live FHIR server.")
+if data_source not in ("Live FHIR Server (HAPI)", "Private Azure FHIR Server"):
+    st.info("Existing CarePlans are only queryable against the live FHIR servers.")
 else:
     @st.cache_data(show_spinner="Fetching CarePlans…", ttl=60)
-    def _fetch_plans(pid: str) -> List[Dict[str, Any]]:
-        return get_client().fetch_care_plans(pid)
+    def _fetch_plans(pid: str, src: str) -> List[Dict[str, Any]]:
+        return get_client(src).fetch_care_plans(pid)
 
     try:
-        plans = _fetch_plans(str(patient_id))
+        plans = _fetch_plans(str(patient_id), data_source)
     except Exception as exc:
         st.warning(f"Could not fetch existing CarePlans: {exc}")
         plans = []
